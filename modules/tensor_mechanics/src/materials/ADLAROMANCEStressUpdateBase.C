@@ -117,6 +117,7 @@ ADLAROMANCEStressUpdateBase::ADLAROMANCEStressUpdateBase(const InputParameters &
 
     _derivative(0.0)
 {
+  _check_range = true; // fixme lynn  -- should this be on or does it matter for this model.
 }
 
 void
@@ -241,6 +242,14 @@ ADLAROMANCEStressUpdateBase::computeResidual(const ADReal & effective_trial_stre
     Moose::out << "  new immobile dislocations: "
                << _immobile_old + MetaPhysicL::raw_value(_immobile_dislocation_increment) << "\n"
                << std::endl;
+  }
+
+  if (rom_effective_strain > effective_trial_stress / (_three_shear_modulus * 1.0e-6))
+  { // fixme lynn, probably need to edit dislocation updates, etc. This is totally creep, no elastic
+    // alpha is zero on lowside of stress.  Alpha is 1 on highside of window.  lienarly interpolate.
+    // want to implement something that smoothly varies from purely elastic to purely creep
+    // rom_effective_strain = effective_trial_stress / _three_shear_modulus * alpha;
+    rom_effective_strain = effective_trial_stress / (_three_shear_modulus * 1.0e-6);
   }
 
   _creep_rate[_qp] = rom_effective_strain / _dt;
