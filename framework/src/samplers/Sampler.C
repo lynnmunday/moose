@@ -12,6 +12,7 @@
 
 // MOOSE includes
 #include "Sampler.h"
+#include "MultiApp.h"
 
 defineLegacyParams(Sampler);
 
@@ -107,57 +108,36 @@ Sampler::init()
 void
 Sampler::reinit()
 {
-  // TODO: If Sampler is updated to be threaded, this partitioning must also include threads
-  if (_n_rows > 0 && n_processors() > _n_rows)
-  {
-    // This code is specifically to match what is going on in MulitApp::buildComm()
-    // This will give the minimum processors per row
-    unsigned int procs_per_row = n_processors() / _n_rows;
-    // This will give the number of rows that have one additional processor
-    unsigned int extra_proc_rows = n_processors() % _n_rows;
-
-    // Index for the processor within a block of processors for a row
-    unsigned int block_ind = 0;
-    // Sample row
-    _local_row_begin = 0;
-    for (unsigned int i = 0; i < n_processors(); ++i)
-    {
-      if (i == processor_id())
-      {
-        if (block_ind == 0)
-          _n_local_rows = 1;
-        else
-        {
-          ++_local_row_begin;
-          _n_local_rows = 0;
-        }
-        break;
-      }
-      ++block_ind;
-
-      // Reset block index and increment row index
-      if (block_ind == procs_per_row)
-      {
-        block_ind = 0;
-        ++_local_row_begin;
-
-        // Increment the number of processors for every app after this point
-        if (_local_row_begin == (_n_rows - extra_proc_rows))
-          ++procs_per_row;
-      }
-    }
-
-    _local_row_end = _local_row_begin + _n_local_rows;
-  }
-  else
-    MooseUtils::linearPartitionItems(
-        _n_rows, n_processors(), processor_id(), _n_local_rows, _local_row_begin, _local_row_end);
-
-  // Set the next row iterator index
-  _next_local_row = _local_row_begin;
+  // do generic default initialization in case no systems/multi-apps are in
+  // use that will call this themselves.
+  setRankConfig(rankConfig(
+      processor_id(), n_processors(), _n_rows, 1, std::numeric_limits<unsigned int>::max()));
+  // unset this from true because we still want to allow external setRankConfig calls to succeed.
+  _rank_config_set = false;
 
   // Update reinit() flag (see execute method)
   _needs_reinit = false;
+}
+
+void
+Sampler::setRankConfig(const LocalRankConfig & config)
+{
+  if (_rank_config_set && (_curr_rank_config != config))
+    mooseError("multiple inconsistent calls to Sampler::setRankConfig. You may have more than one "
+               "multiapp per sampler.");
+  _rank_config_set = true;
+  _curr_rank_config = config;
+
+  // Only one processor can "own" each sample - even if the sample/app itself
+  // will run on multiple procs/ranks:
+  if (config.is_first_local_rank)
+    _n_local_rows = config.num_local_sims;
+  else
+    _n_local_rows = 0;
+
+  _local_row_begin = config.first_local_sim_index;
+  _local_row_end = _local_row_begin + _n_local_rows;
+  _next_local_row = _local_row_begin;
 }
 
 void

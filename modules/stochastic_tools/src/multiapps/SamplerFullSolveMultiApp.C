@@ -86,6 +86,10 @@ void SamplerFullSolveMultiApp::preTransfer(Real /*dt*/, Real /*target_time*/)
     if (_solved_once)
       initialSetup();
   }
+
+  _sampler.setRankConfig(init(_sampler.getNumberOfRows(),
+                              _mode == StochasticTools::MultiAppMode::BATCH_RESET ||
+                                  _mode == StochasticTools::MultiAppMode::BATCH_RESTORE));
 }
 
 bool

@@ -16,6 +16,7 @@
 #include "DistributionInterface.h"
 #include "PerfGraphInterface.h"
 #include "SamplerInterface.h"
+#include "MultiApp.h"
 
 template <>
 InputParameters validParams<Sampler>();
@@ -110,6 +111,14 @@ public:
   dof_id_type getLocalRowBegin() const;
   dof_id_type getLocalRowEnd() const;
   ///@}
+
+  /// Other systems that deal with deploying parallel runs related to  samplers
+  /// will likely need to call this in their constructors (e.g. stochastic
+  /// tools multiapps) so that they can retrieve relevant parameters for generating a
+  /// consistent rank<-->subapp partitioning with the multiapp for parallel runs.
+  /// This can only be called with one particular LocalRankConfig ever - it is
+  /// an error to call it consecutively with different LocalRankConfig's.
+  void setRankConfig(const LocalRankConfig & config);
 
 protected:
   // The following methods are the basic methods that should be utilized my most application
@@ -264,6 +273,9 @@ private:
    * Advance method for internal use that considers the auto advance flag.
    */
   void advanceGeneratorsInternal(const dof_id_type count);
+
+  LocalRankConfig _curr_rank_config;
+  bool _rank_config_set = false;
 
   /// Random number generator, don't give users access. Control it via the interface from this class.
   MooseRandom _generator;
