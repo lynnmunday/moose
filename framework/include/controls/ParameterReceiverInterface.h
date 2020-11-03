@@ -12,7 +12,9 @@
 // MOOSE includes
 #include "MultiAppTransfer.h"
 
+// Forward Declarations
 class ParameterReceiver;
+class FEProblemBase;
 
 class ParameterReceiverInterface
 {
@@ -20,7 +22,7 @@ public:
   /**
    * Constructor
    */
-  ParameterReceiverInterface();
+  ParameterReceiverInterface(const MooseObject * moose_object);
 
   /**
    * This class gives access to the transfer method for controllable values
@@ -31,4 +33,16 @@ public:
   void transferParameters(ParameterReceiver & receiver,
                           const std::vector<std::string> & names,
                           const std::vector<Real> & values) const;
+
+  /**
+   * Return the ParameterReceiver object and perform error checking.
+   * @param app_index The global sup-app index
+   */
+  ParameterReceiver & getReceiver2(const std::string & multi_app_name,
+                                   const std::string & receiver_name,
+                                   unsigned int app_index);
+
+private:
+  /// Reference the FEProblemBase class
+  FEProblemBase & _feproblem;
 };

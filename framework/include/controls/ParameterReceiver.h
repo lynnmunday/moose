@@ -26,15 +26,17 @@ public:
   ParameterReceiver(const InputParameters & parameters);
   virtual void execute() override;
 
+protected:
   /**
    * Update the parameter names and associated values.
    */
   void transfer(const std::vector<std::string> & names, const std::vector<Real> & values);
 
-protected:
   /// Parameter names to modify
   std::vector<std::string> _parameters;
 
   /// Values to use when modifying parameters
   std::vector<Real> _values;
+
+  friend class ParameterReceiverInterface;
 };

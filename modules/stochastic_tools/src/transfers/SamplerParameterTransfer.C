@@ -40,7 +40,7 @@ SamplerParameterTransfer::validParams()
 
 SamplerParameterTransfer::SamplerParameterTransfer(const InputParameters & parameters)
   : StochasticToolsTransfer(parameters),
-    ParameterReceiverInterface(),
+    ParameterReceiverInterface(this),
     _parameter_names(getParam<std::vector<std::string>>("parameters")),
     _receiver_name(getParam<std::string>("to_control"))
 {
@@ -62,13 +62,13 @@ SamplerParameterTransfer::execute()
                 "The current sample row index is not a valid global MultiApp index.");
 
     // Get the sub-app ParameterReceiver object and perform error checking
-    ParameterReceiver * ptr = getReceiver(row_index);
+    ParameterReceiver & ptr = getReceiver2(_multi_app->name(), _receiver_name, processor_id());
 
     // Populate the row of data to transfer
     std::vector<Real> row = _sampler_ptr->getNextLocalRow();
 
     // Perform the transfer
-    transferParameters(*ptr, _parameter_names, row);
+    transferParameters(ptr, _parameter_names, row);
   }
 }
 
@@ -81,12 +81,12 @@ SamplerParameterTransfer::initializeToMultiapp()
 void
 SamplerParameterTransfer::executeToMultiapp()
 {
-  ParameterReceiver * ptr = getReceiver(processor_id());
+  ParameterReceiver & ptr = getReceiver2(_multi_app->name(), _receiver_name, processor_id());
 
   std::vector<Real> row = _sampler_ptr->getNextLocalRow();
 
   // Perform the transfer
-  transferParameters(*ptr, _parameter_names, row);
+  transferParameters(ptr, _parameter_names, row);
 
   _global_index++;
 }
