@@ -122,9 +122,11 @@ Sampler::reinit()
 void
 Sampler::setRankConfig(const LocalRankConfig & config)
 {
-  if (_rank_config_set && (_curr_rank_config != config))
-    mooseError("multiple inconsistent calls to Sampler::setRankConfig. You may have more than one "
-               "multiapp per sampler.");
+  // fixme lynn this gets called because the sampler is now dynamically resizing itself
+  //  if (_rank_config_set && (_curr_rank_config != config))
+  //    mooseError("multiple inconsistent calls to Sampler::setRankConfig. You may have more than
+  //    one "
+  //               "multiapp per sampler.");
   _rank_config_set = true;
   _curr_rank_config = config;
 

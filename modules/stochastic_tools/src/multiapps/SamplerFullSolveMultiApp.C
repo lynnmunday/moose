@@ -50,24 +50,10 @@ SamplerFullSolveMultiApp::SamplerFullSolveMultiApp(const InputParameters & param
     _perf_solve_batch_step(registerTimedSection("solveStepBatch", 1)),
     _perf_command_line_args(registerTimedSection("getCommandLineArgsParamHelper", 4))
 {
-  if (_mode == StochasticTools::MultiAppMode::BATCH_RESET ||
-      _mode == StochasticTools::MultiAppMode::BATCH_RESTORE)
-  {
-    if (n_processors() > _sampler.getNumberOfRows())
-      paramError(
-          "mode",
-          "There appears to be more available processors (",
-          n_processors(),
-          ") than samples (",
-          _sampler.getNumberOfRows(),
-          "), this is not supported in "
-          "batch mode. Consider switching to \'normal\' to allow multiple processors per sample.");
-    init(n_processors());
-  }
-  else
-    init(_sampler.getNumberOfRows());
 
-  _number_of_sampler_rows = _sampler.getNumberOfRows();
+  _sampler.setRankConfig(init(_sampler.getNumberOfRows(),
+                              _mode == StochasticTools::MultiAppMode::BATCH_RESET ||
+                                  _mode == StochasticTools::MultiAppMode::BATCH_RESTORE));
 }
 
 void SamplerFullSolveMultiApp::preTransfer(Real /*dt*/, Real /*target_time*/)
@@ -86,10 +72,6 @@ void SamplerFullSolveMultiApp::preTransfer(Real /*dt*/, Real /*target_time*/)
     if (_solved_once)
       initialSetup();
   }
-
-  _sampler.setRankConfig(init(_sampler.getNumberOfRows(),
-                              _mode == StochasticTools::MultiAppMode::BATCH_RESET ||
-                                  _mode == StochasticTools::MultiAppMode::BATCH_RESTORE));
 }
 
 bool
