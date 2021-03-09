@@ -60,11 +60,22 @@ protected:
   /// Enum to error, warn, ignore, or extrapolate if input is outside of window of applicability
   enum class WindowFailure
   {
-    ERROR,
-    WARN,
-    IGNORE,
-    EXTRAPOLATE
+    ERROR = 0,
+    EXCEPTION = 1,
+    WARN = 2,
+    IGNORE = 3,
+    EXTRAPOLATE = 4
   };
+  /// Function to get the the mooseEnum for the parameters that corresponds to the valid WindowFailure
+  static MooseEnum getWindowEnumsForErrorLimitBehavior()
+  {
+    return {"ERROR=0 EXCEPTION=1 WARN=2 IGNORE=3", "EXCEPTION"};
+  }
+  /// Function to get the the mooseEnum for the parameters that corresponds to the valid WindowFailure
+  static MooseEnum getWindowEnumsForExtrapolatedLimitBehavior()
+  {
+    return {"ERROR=0 EXCEPTION=1 WARN=2 IGNORE=3 EXTRAPOLATE=4", "EXTRAPOLATE"};
+  }
 
   /**
    * Precompute the ROM strain rate information for all inputs except for strain. Strain will be

@@ -25,7 +25,7 @@ LAROMANCEStressUpdateBaseTempl<is_ad>::validParams()
   params.addParam<MaterialPropertyName>("environmental_factor",
                                         "Optional coupled environmental factor");
 
-  MooseEnum error_limit_behavior("ERROR WARN IGNORE", "ERROR");
+  MooseEnum error_limit_behavior = getWindowEnumsForErrorLimitBehavior();
   params.addParam<MooseEnum>("cell_input_window_failure",
                              error_limit_behavior,
                              "What to do if cell dislocation concentration is outside the global "
@@ -39,7 +39,7 @@ LAROMANCEStressUpdateBaseTempl<is_ad>::validParams()
       error_limit_behavior,
       "What to do if old strain is outside the global window of applicability.");
 
-  MooseEnum extrapolated_limit_behavior("ERROR WARN IGNORE EXTRAPOLATE", "EXTRAPOLATE");
+  MooseEnum extrapolated_limit_behavior = getWindowEnumsForExtrapolatedLimitBehavior();
   params.addParam<MooseEnum>("stress_input_window_failure",
                              extrapolated_limit_behavior,
                              "What to do if stress is outside the global window of applicability.");
@@ -460,7 +460,8 @@ LAROMANCEStressUpdateBaseTempl<is_ad>::checkInputWindow(const GenericReal<is_ad>
                                                         const WindowFailure behavior,
                                                         const std::vector<Real> & global_limits)
 {
-  if (behavior != WindowFailure::WARN && behavior != WindowFailure::ERROR)
+  if (behavior != WindowFailure::WARN && behavior != WindowFailure::ERROR &&
+      behavior != WindowFailure::EXCEPTION)
     return;
 
   if (input < global_limits[0] || input > global_limits[1])
@@ -472,6 +473,8 @@ LAROMANCEStressUpdateBaseTempl<is_ad>::checkInputWindow(const GenericReal<is_ad>
     if (behavior == WindowFailure::WARN)
       mooseWarning(msg.str());
     else if (behavior == WindowFailure::ERROR)
+      mooseError(msg.str());
+    else
       mooseException(msg.str());
   }
 }
