@@ -1,0 +1,20 @@
+[Tests]
+  group = 'Reporter Point Marker'
+  design = "/Markers/index.md /ReporterPointMarker.md"
+  issues = '#18886'
+  [mark_only]
+    type = 'Exodiff'
+    input = 'point_marker_test.i'
+    exodiff = 'point_marker_test_out.e'
+    scale_refine = 2
+    requirement = "The adaptivity system shall create an auxiliary field variable that marks "
+                  "elements containing the points from the reporter for refinement."
+  []
+  [wrong_size_error]
+    type = 'RunException'
+    input = 'point_marker_test.i'
+    cli_args = 'Adaptivity/Markers/inactive=box'
+    expect_err = "The coordinate vectors are a different size."
+    requirement = "The point marker shall report an error if the input arrays are not the same size"
+  []
+[]
