@@ -1,4 +1,4 @@
-w=10
+w=10 #angular frequency = 2*pi*frequency
 [Mesh]
    type = GeneratedMesh
    dim = 1
