@@ -17,7 +17,7 @@
 [DiracKernels]
   [pt]
     type = ReporterPointSource
-    variable = adjoint_T
+    variable = "adjoint_T"
     x_coord_name = misfit/measurement_xcoord
     y_coord_name = misfit/measurement_ycoord
     z_coord_name = misfit/measurement_zcoord

@@ -69,6 +69,14 @@
                     misfit/misfit_values
                     params/q'
   []
+  [fromForwardtoAdjoint]
+    type = MultiAppReporterTransfer
+    from_multi_app = forward
+    to_multi_app = adjoint
+    from_reporters = 'measure_data/weight_temperature'
+    to_reporters = 'dummy/weight'
+  []
+
   [fromForward]
     type = MultiAppReporterTransfer
     from_multi_app = forward

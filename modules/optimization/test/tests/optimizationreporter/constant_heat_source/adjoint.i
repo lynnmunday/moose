@@ -40,6 +40,11 @@
     real_vector_names = 'q'
     real_vector_values = '0' # Dummy value
   []
+  [dummy]
+    type = ConstantReporter
+    real_vector_names = 'weight'
+    real_vector_values = '0' # Dummy value
+  []
 []
 
 [BCs]
@@ -106,4 +111,5 @@
 [Outputs]
   console = false
   file_base = 'adjoint'
+  csv=true
 []

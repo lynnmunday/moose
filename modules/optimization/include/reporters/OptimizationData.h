@@ -37,6 +37,8 @@ protected:
   std::vector<Real> & _simulation_values;
   /// difference between simulation and measurment values at measurment xyzt
   std::vector<Real> & _misfit_values;
+  /// Parameter values declared as reporter data
+  std::map<std::string, std::vector<Real> *> _var_names_weights_map;
 
 private:
   /// parse measurement data from csv file
@@ -46,5 +48,5 @@ private:
   /// private method for testing optimizationData with test src
   void setSimulationValuesForTesting(std::vector<Real> & data);
   /// variable
-  const MooseVariableFieldBase * const _var;
+  std::vector<MooseVariableFieldBase *> _var_vec;
 };

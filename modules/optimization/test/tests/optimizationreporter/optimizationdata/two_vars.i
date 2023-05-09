@@ -1,0 +1,62 @@
+[Mesh]
+  [gmg]
+    type = GeneratedMeshGenerator
+    dim = 2
+    nx = 2
+    ny = 2
+  []
+[]
+
+[Problem]
+  solve=false
+[]
+
+[AuxVariables]
+  [disp_x]
+    order = FIRST
+    family = LAGRANGE
+  []
+  [disp_y]
+    order = FIRST
+    family = LAGRANGE
+  []
+[]
+
+[AuxKernels]
+  [aux_disp_x]
+    type = ParsedAux
+    variable = disp_x
+    use_xyzt = true
+    expression = '2*x'
+  []
+  [aux_disp_y]
+    type = ParsedAux
+    variable = disp_y
+    use_xyzt = true
+    expression = 'y'
+  []
+[]
+
+
+[Reporters]
+  [measure_data]
+    type = OptimizationData
+    measurement_points = '0.1 0 0
+                          0.5 0 0
+                          0 0.1 0
+                          0 0.5 0'
+    measurement_values = '1 1 1 1'
+    variables = 'disp_x disp_y'
+  []
+[]
+
+[BCs]
+[]
+
+[Executioner]
+  type = Steady
+[]
+
+[Outputs]
+  csv = true
+[]

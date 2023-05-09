@@ -91,4 +91,5 @@
 [Outputs]
   console = false
   file_base = 'forward'
+  csv=true
 []
