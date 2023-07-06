@@ -13,42 +13,20 @@
 [gen]
   type = GeneratedMeshGenerator
   dim = 2
-  nx = 20
-  ny = 10
+  nx = 10
+  ny = 20
   xmin = 0
-  xmax = 2
+  xmax = 1
   ymin = 0.0
-  ymax = 1.0
+  ymax = 2.0
   elem_type = QUAD4
 []
 [top_left]
   type = BoundingBoxNodeSetGenerator
   new_boundary = pull_top_left
-  bottom_left = '-0.01 0.99 0'
-  top_right = '0.11 1.01 0'
+  bottom_left = '-0.01 1.99 0'
+  top_right = '0.11 2.01 0'
   input = gen
-[]
-[top_right]
-  type = BoundingBoxNodeSetGenerator
-  new_boundary = pull_top_right
-  bottom_left = '1.89 0.99 0'
-  top_right = '2.01 1.01 0'
-  input = top_left
-[]
-[top_middle_ss]
-  type = SideSetsFromBoundingBoxGenerator
-  input = top_right
-  bottom_left = '0.79 0.89 0'
-  top_right = '1.21 1.01 0'
-  block_id = '0'
-  boundary_new = top_middle_ss
-  boundaries_old = top
-[]
-[nucleate]
-  type = ParsedSubdomainMeshGenerator
-  input = top_middle_ss
-  combinatorial_geometry = 'y > 0.39 & y < 0.51'
-  block_id = 10
 []
 []
 
@@ -73,44 +51,18 @@
     type = MeshCutRankTwoTensorNucleation
     tensor = stress
     scalar_type = MaxPrincipal
-    nucleation_threshold = nucleation_threshold
-    initiate_on_boundary = 'left right'
+    nucleation_threshold = 180
+    initiate_on_boundary = 'left'
     average = true
     nucleation_length = .2
+    nucleation_radius = .21
   []
   [cut_mesh2]
     type = MeshCut2DFractureUserObject
     mesh_file = make_edge_crack_in.e
-    k_critical=230
+    k_critical=500000
     growth_increment = 0.11
     nucleate_uo = nucleate
-  []
-[]
-[AuxVariables]
-  [nucleation_threshold]
-    order = CONSTANT
-    family = MONOMIAL
-  []
-[]
-[ICs]
-   [nucleation_bulk]
-     type = ConstantIC
-     value = 10000
-     variable = nucleation_threshold
-     block = 0
-   []
-   [nucleation_weak]
-    type = FunctionIC
-    function = nucleation_x
-    variable = nucleation_threshold
-    block = 10
-  []
-[]
-
-[Functions]
-  [nucleation_x]
-    type = ParsedFunction
-    expression = '300+x*50'
   []
 []
 
@@ -133,15 +85,9 @@
 [BCs]
   [top_edges]
       type = FunctionDirichletBC
-      boundary = 'pull_top_left pull_top_right'
+      boundary = 'pull_top_left'
       variable = disp_y
       function = bc_pull_top
-  []
-  [top_middle]
-    type = NeumannBC
-    boundary = top_middle_ss
-    variable = disp_y
-    value = -2000
   []
   [bottom_x]
     type = DirichletBC
@@ -201,14 +147,4 @@
 [Outputs]
   csv=true
   execute_on = TIMESTEP_END
-  # [xfemcutter]
-  #   type=XFEMCutMeshOutput
-  #   xfem_cutter_uo=cut_mesh2
-  # []
-  # console = false
-  [./console]
-    type = Console
-    output_linear = false
-    output_nonlinear = false
-  [../]
 []
