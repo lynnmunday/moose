@@ -9,36 +9,37 @@
 []
 
 [Variables]
-  [diff]
+  [coeff]
     family = MONOMIAL
     order = CONSTANT
   []
 []
 
 [AuxVariables]
-  [diff_star]
+  [controllable_coeff]
     family = MONOMIAL
     order = CONSTANT
   []
-  [d_mat_d_diff]
+  [d_mat_d_coeff]
     family = MONOMIAL
     order = CONSTANT
   []
 []
 
 [AuxKernels]
-  [d_mat_d_diff]
-      type = ADMaterialRealAux
-      variable = d_mat_d_diff
-      property = ad_opt_prop_deriv
-      execute_on = 'TIMESTEP_END'
-    []
+  [d_mat_d_coeff]
+    type = ADMaterialRealAux
+    variable = d_mat_d_coeff
+    property = ad_opt_prop_deriv
+    execute_on = 'TIMESTEP_END'
+  []
 []
 
 [ICs]
-  [set_ic]
+  # this is the parameter coeff that TAO is going to set
+  [coeff_from_transfer]
     type = FunctionIC
-    variable = diff_star
+    variable = controllable_coeff
     function = '3+x+y'
   []
 []
@@ -46,28 +47,28 @@
 [Materials]
   [difference]
     type = ADParsedMaterial
-    expression = 'diff_star'
-    coupled_variables = 'diff_star'
+    expression = 'controllable_coeff'
+    coupled_variables = 'controllable_coeff'
     property_name = difference
   []
   [ADmaterial_property]
     type = ADParsedMaterial
-    expression = "diff * diff"
-    coupled_variables = "diff"
+    expression = "coeff * coeff"
+    coupled_variables = "coeff"
     property_name = ad_opt_prop
   []
   [ADmaterialDeriv_property]
     type = ADCoupledVariableDerivativeMaterial
     derivative_prop_name = ad_opt_prop_deriv
     material_property = ad_opt_prop
-    derivative_variable_name = diff
+    derivative_variable_name = coeff
   []
 []
 
 [Kernels]
   [diffusion]
     type = ADMaterialPropertyValue
-    variable = diff
+    variable = coeff
     prop_name = difference
   []
 []
