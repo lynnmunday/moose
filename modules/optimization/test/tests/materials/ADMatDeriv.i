@@ -9,6 +9,7 @@
 []
 
 [Variables]
+  #dummy variable of parameter
   [coeff]
     family = MONOMIAL
     order = CONSTANT
@@ -30,7 +31,7 @@
   [d_mat_d_coeff]
     type = ADMaterialRealAux
     variable = d_mat_d_coeff
-    property = ad_opt_prop_deriv
+    property = mat_prop_deriv
     execute_on = 'TIMESTEP_END'
   []
 []
@@ -40,36 +41,39 @@
   [coeff_from_transfer]
     type = FunctionIC
     variable = controllable_coeff
-    function = '3+x+y'
+    function = 'x+y'
   []
 []
 
 [Materials]
-  [difference]
+  [controllable_coeff_material]
+    #This puts the controllable_coeff AuxVariable set by an IC and places it in a material
     type = ADParsedMaterial
     expression = 'controllable_coeff'
     coupled_variables = 'controllable_coeff'
-    property_name = difference
+    property_name = controllable_coeff_material
   []
   [ADmaterial_property]
+    # this is just a new type material that is parameter^2 so that we have something to differentiate
+    # This is the material property being used
     type = ADParsedMaterial
     expression = "coeff * coeff"
     coupled_variables = "coeff"
-    property_name = ad_opt_prop
+    property_name = mat_prop
   []
   [ADmaterialDeriv_property]
     type = ADCoupledVariableDerivativeMaterial
-    derivative_prop_name = ad_opt_prop_deriv
-    material_property = ad_opt_prop
+    derivative_prop_name = mat_prop_deriv
+    material_property = mat_prop
     derivative_variable_name = coeff
   []
 []
 
 [Kernels]
-  [diffusion]
+  [setCoefficient]
     type = ADMaterialPropertyValue
     variable = coeff
-    prop_name = difference
+    prop_name = controllable_coeff_material
   []
 []
 
