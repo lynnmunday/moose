@@ -27,8 +27,9 @@
 [UserObjects]
   [nodalDer]
     type = NodalResidualDerivative
-    var = forwardT
-    deriv_wrt_var = coeff
+    u_var = forwardT
+    p_var = coeff
+    dudp_var = dudp
     execute_on = TIMESTEP_END
     matrix_tag = mat_tag
   []
@@ -37,6 +38,9 @@
 [Variables]
   [forwardT]
   []
+[]
+[AuxVariables]
+  [dudp][]
 []
 [Kernels]
   [heat_conduction]

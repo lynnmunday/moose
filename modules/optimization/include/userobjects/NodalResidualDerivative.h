@@ -25,16 +25,22 @@ public:
   virtual void initialize() override;
   virtual void execute() override;
   virtual void finalize() override {}
-  virtual void threadJoin(const UserObject &) override {}
 
 private:
   NonlinearSystemBase & _nl_sys;
+  AuxiliarySystem & _aux_sys;
   /// The number of the nonlinear system containing the coupled variable
   const unsigned int _nl_sys_num;
+  /// The number of the nonlinear system containing the coupled variable
+  const unsigned int _aux_sys_num;
+
   // Variable being differentiated (dependent variable)
-  const MooseVariable & _var;
+  const MooseVariable & _u_var;
   // differentiated with respect to variable (independent variable)
-  const MooseVariable & _deriv_wrt_var;
+  const MooseVariable & _p_var;
+
+  // target variable
+  const MooseVariable & _dudp_var;
 
   const unsigned int _tag_id;
 };
