@@ -10,13 +10,13 @@
 #pragma once
 
 // MOOSE includes
-#include "NodalUserObject.h"
+#include "GeneralUserObject.h"
 
 /**
  * User object that multiplies variable A by the off-diagaonal Jacobian term of variable A with
  * respect to variable B.
  */
-class NodalResidualDerivative : public NodalUserObject
+class NodalResidualDerivative : public GeneralUserObject
 {
 public:
   static InputParameters validParams();

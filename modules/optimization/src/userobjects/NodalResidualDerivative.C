@@ -15,7 +15,7 @@ registerMooseObject("OptimizationApp", NodalResidualDerivative);
 InputParameters
 NodalResidualDerivative::validParams()
 {
-  InputParameters params = NodalUserObject::validParams();
+  InputParameters params = GeneralUserObject::validParams();
   params.addClassDescription("Multiply off-diag Jacobian by variable");
 
   params.addRequiredParam<VariableName>("var",
@@ -30,7 +30,7 @@ NodalResidualDerivative::validParams()
 }
 
 NodalResidualDerivative::NodalResidualDerivative(const InputParameters & parameters)
-  : NodalUserObject(parameters),
+  : GeneralUserObject(parameters),
     _nl_sys(_fe_problem.getNonlinearSystemBase()),
     _nl_sys_num(_fe_problem.nlSysNum(getParam<NonlinearSystemName>("nl_sys_name"))),
     _var(_subproblem.getStandardVariable(_tid, getParam<VariableName>("var"))),
@@ -47,11 +47,10 @@ NodalResidualDerivative::initialize()
 void
 NodalResidualDerivative::execute()
 {
-  dof_id_type dof_id_var = _current_node->dof_number(_nl_sys_num, _var.number(), /*tid*/ 0);
-  dof_id_type dof_id_dvVar =
-      _current_node->dof_number(_nl_sys_num, _deriv_wrt_var.number(), /*tid*/ 0);
+  dof_id_type dof_id_var = _current_node->dof_number(_nl_sys_num, _var.number(), _tid);
+  dof_id_type dof_id_dvVar = _current_node->dof_number(_nl_sys_num, _deriv_wrt_var.number(), _tid);
 
-  const auto & jacobian = _nl_sys.getMatrix(_tag_id); //_nl_sys.systemMatrixTag());
+  SparseMatrix<Number> & jacobian = _nl_sys.getMatrix(_tag_id); //_nl_sys.systemMatrixTag());
 
   std::cout << "dof_id_var,dof_id_dvVar= " << dof_id_var << " " << dof_id_dvVar << " "
             << jacobian(dof_id_var, dof_id_dvVar) << std::endl;
