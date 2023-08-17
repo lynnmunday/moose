@@ -10,6 +10,7 @@
 #include "NodalResidualDerivative.h"
 #include "NonlinearSystemBase.h"
 #include "AuxiliarySystem.h"
+#include "Conversion.h"
 #include "libmesh/petsc_matrix.h"
 #include "libmesh/petsc_vector.h"
 
@@ -70,22 +71,43 @@ NodalResidualDerivative::execute()
     ++i;
   }
 
+  // dudp vector (use aux var for this!)
+  std::vector<Real> dudp_vec(n_dofs);
+
+  // inverse p_dofs
+  std::map<dof_id_type, std::size_t> inverse_p_dofs;
+  for (const auto i : index_range(p_dofs))
+    inverse_p_dofs[p_dofs[i]] = i;
+
   // get u solution
-  std::vector<Real> u(n_dofs);
-  _nl_sys.currentSolution()->get(u_dofs, u);
+  std::vector<Real> us(n_dofs);
+  _nl_sys.currentSolution()->get(u_dofs, us);
 
   // get entire  jacobian
   SparseMatrix<Number> & jacobian = _nl_sys.getMatrix(_tag_id);
 
-  // get R_up subblock
-  PetscMatrix<Number> R_up(_communicator);
-  jacobian.create_submatrix(R_up, u_dofs, p_dofs);
+  std::vector<Real> row;
+  std::vector<dof_id_type> row_dofs;
 
-  std::cout << R_up << '\n';
+  for (const auto u_idx : index_range(u_dofs))
+  {
+    const auto u_dof = u_dofs[u_idx];
+    const auto u = us[u_idx];
 
-  // PetscVector<Number> dest(_communicator);
-  // R_up.vector_mult(dest, *_nl_sys.currentSolution());
+    jacobian.get_row(u_dof, row_dofs, row);
 
-  // std::cout << dest << std::endl;
-  // // maybe do something like in PhysicsBasedPreconditioner::setup()
+    for (const auto j : index_range(row_dofs))
+    {
+      const auto it = inverse_p_dofs.find(row_dofs[j]);
+      if (it == inverse_p_dofs.end())
+        continue;
+
+      const auto p_idx = it->second;
+      const auto dudp = row[j];
+
+      dudp_vec[p_idx] += dudp * u;
+    }
+  }
+
+  std::cout << Moose::stringify(dudp_vec) << '\n';
 }
