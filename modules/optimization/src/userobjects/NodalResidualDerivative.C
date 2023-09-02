@@ -7,12 +7,18 @@
 //* Licensed under LGPL 2.1, please see LICENSE for details
 //* https://www.gnu.org/licenses/lgpl-2.1.html
 
+#include "MooseTypes.h"
 #include "NodalResidualDerivative.h"
 #include "NonlinearSystemBase.h"
 #include "AuxiliarySystem.h"
 #include "Conversion.h"
+#include "libmesh/id_types.h"
 #include "libmesh/petsc_matrix.h"
 #include "libmesh/petsc_vector.h"
+#include "libmesh/sparse_matrix.h"
+#include <algorithm>
+#include <iostream>
+#include <memory>
 
 registerMooseObject("OptimizationApp", NodalResidualDerivative);
 
@@ -55,6 +61,10 @@ NodalResidualDerivative::initialize()
 void
 NodalResidualDerivative::execute()
 {
+  // Now we need to get the row and column indicies entries we care about.
+  std::vector<dof_id_type> row_idx;
+  std::vector<dof_id_type> col_idx;
+
   const auto & mesh = _fe_problem.mesh();
   const auto & aslr = *mesh.getActiveSemiLocalNodeRange();
   std::vector<std::tuple<dof_id_type, dof_id_type, dof_id_type>> dofs(aslr.size());
@@ -88,14 +98,14 @@ NodalResidualDerivative::execute()
 
   std::vector<Real> row;
   std::vector<dof_id_type> row_dofs;
-
+  // u_idx is the row
   for (const auto u_idx : index_range(u_dofs))
   {
     const auto u_dof = u_dofs[u_idx];
     const auto u = us[u_idx];
 
     jacobian.get_row(u_dof, row_dofs, row);
-
+    // j is the column?
     for (const auto j : index_range(row_dofs))
     {
       const auto it = inverse_p_dofs.find(row_dofs[j]);
@@ -104,10 +114,36 @@ NodalResidualDerivative::execute()
 
       const auto p_idx = it->second;
       const auto dudp = row[j];
-
       dudp_vec[p_idx] += dudp * u;
+      // save the index information
+      row_idx.push_back(u_idx);
+      col_idx.push_back(j);
     }
   }
 
+  // Here is the sparse matrix that we want
+  libMesh::PetscMatrix<Real> dRdp(_communicator);
+  // This will need to be different in parallel
+  dRdp.init(u_dofs.size(), p_dofs.size(), u_dofs.size(), p_dofs.size());
+
+  // Extract the sub components into the matrix
+  dof_id_type idx = 0;
+  for (MooseIndex(u_dofs.size()) r_idx = 0; r_idx < u_dofs.size(); r_idx++)
+  {
+    for (MooseIndex(p_dofs.size()) c_idx = 0; c_idx < p_dofs.size(); c_idx++)
+    {
+      dRdp.set(r_idx, c_idx, jacobian(row_idx[idx], col_idx[idx]));
+      idx++;
+    }
+  }
+  dRdp.close();
+
+  for (size_t row = 0; row < dRdp.m(); row++)
+  {
+    std::vector<dof_id_type> row_ind;
+    std::vector<Real> row_vals;
+    dRdp.get_row(row, row_ind, row_vals);
+    std::cout << Moose::stringify(row_vals) << '\n';
+  }
   std::cout << Moose::stringify(dudp_vec) << '\n';
 }
