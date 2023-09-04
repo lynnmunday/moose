@@ -13,6 +13,8 @@
 #include "AuxiliarySystem.h"
 #include "Conversion.h"
 #include "libmesh/id_types.h"
+#include "libmesh/libmesh_common.h"
+#include "libmesh/numeric_vector.h"
 #include "libmesh/petsc_matrix.h"
 #include "libmesh/petsc_vector.h"
 #include "libmesh/sparse_matrix.h"
@@ -89,6 +91,11 @@ NodalResidualDerivative::execute()
   for (const auto i : index_range(p_dofs))
     inverse_p_dofs[p_dofs[i]] = i;
 
+  // inverse u_dofs
+  std::map<dof_id_type, std::size_t> inverse_u_dofs;
+  for (const auto i : index_range(u_dofs))
+    inverse_u_dofs[u_dofs[i]] = i;
+
   // get u solution
   std::vector<Real> us(n_dofs);
   _nl_sys.currentSolution()->get(u_dofs, us);
@@ -98,7 +105,7 @@ NodalResidualDerivative::execute()
 
   std::vector<Real> row;
   std::vector<dof_id_type> row_dofs;
-  // u_idx is the row
+  // u_dof is the row index
   for (const auto u_idx : index_range(u_dofs))
   {
     const auto u_dof = u_dofs[u_idx];
@@ -116,7 +123,7 @@ NodalResidualDerivative::execute()
       const auto dudp = row[j];
       dudp_vec[p_idx] += dudp * u;
       // save the index information
-      row_idx.push_back(u_idx);
+      row_idx.push_back(u_dof);
       col_idx.push_back(j);
     }
   }
@@ -126,16 +133,16 @@ NodalResidualDerivative::execute()
   // This will need to be different in parallel
   dRdp.init(u_dofs.size(), p_dofs.size(), u_dofs.size(), p_dofs.size());
 
-  // Extract the sub components into the matrix
-  dof_id_type idx = 0;
-  for (MooseIndex(u_dofs.size()) r_idx = 0; r_idx < u_dofs.size(); r_idx++)
+  // Create maps to store unique values and their positions
+  std::map<dof_id_type, dof_id_type> unique_row_idx, unique_col_idx;
+
+  // Populate the dRdp matrix using the maps
+  for (dof_id_type i = 0; i < row_idx.size(); i++)
   {
-    for (MooseIndex(p_dofs.size()) c_idx = 0; c_idx < p_dofs.size(); c_idx++)
-    {
-      dRdp.set(r_idx, c_idx, jacobian(row_idx[idx], col_idx[idx]));
-      idx++;
-    }
+    dRdp.set(
+        inverse_u_dofs[row_idx[i]], inverse_p_dofs[col_idx[i]], jacobian(row_idx[i], col_idx[i]));
   }
+
   dRdp.close();
 
   for (size_t row = 0; row < dRdp.m(); row++)
@@ -145,5 +152,21 @@ NodalResidualDerivative::execute()
     dRdp.get_row(row, row_ind, row_vals);
     std::cout << Moose::stringify(row_vals) << '\n';
   }
+  PetscVector<Real> lambda_T(_communicator, u_dofs.size());
+
+  lambda_T.insert(us,
+                  [&]
+                  {
+                    std::vector<dof_id_type> v(u_dofs.size());
+                    std::iota(v.begin(), v.end(), 0);
+                    return v;
+                  }());
+
+  PetscVector<Real> lT_dRdp(_communicator, p_dofs.size());
+  dRdp.get_transpose(dRdp);
+  dRdp.vector_mult(lT_dRdp, lambda_T);
+
   std::cout << Moose::stringify(dudp_vec) << '\n';
+  std::cout << lT_dRdp << std::endl;
+  return;
 }
