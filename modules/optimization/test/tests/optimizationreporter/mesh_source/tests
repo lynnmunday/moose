@@ -63,6 +63,14 @@
       max_threads = 1 # Optimize executioner does not support multiple threads
       detail = 'performing the inverse optimization with an automatically computed adjoint;'
     []
+    [auto_adjoint_genRep]
+      type = Exodiff
+      input = main_auto_adjoint_genRep.i
+      exodiff = main_auto_adjoint_genRep_out_forward0.e
+      prereq = 'mesh_source/mesh'
+      max_threads = 1 # Optimize executioner does not support multiple threads
+      detail = 'performing the inverse optimization with an automatically computed adjoint and computing the objective function manually on the forward simulation and transferring it to the optimizer;'
+    []
     [restartMesh]
       type = CheckFiles
       input = parameter_mesh_restart.i
