@@ -1,0 +1,164 @@
+{
+    "reporters": {
+        "OptimizationReporter": {
+            "type": "VariationalInferenceOptimization",
+            "values": {
+                "covariance_p1": {
+                    "type": "std::vector<double>"
+                },
+                "covariance_p2": {
+                    "type": "std::vector<double>"
+                },
+                "grad_covariance_p1": {
+                    "type": "std::vector<double>"
+                },
+                "grad_covariance_p2": {
+                    "type": "std::vector<double>"
+                },
+                "grad_p1": {
+                    "type": "std::vector<double>"
+                },
+                "grad_p2": {
+                    "type": "std::vector<double>"
+                },
+                "objective_value": {
+                    "type": "double"
+                },
+                "p1": {
+                    "type": "std::vector<double>"
+                },
+                "p2": {
+                    "type": "std::vector<double>"
+                },
+                "sampled_p1": {
+                    "type": "std::vector<double>"
+                },
+                "sampled_p2": {
+                    "type": "std::vector<double>"
+                }
+            }
+        }
+    },
+    "time_steps": [
+        {
+            "OptimizationReporter": {
+                "covariance_p1": [
+                    1.0,
+                    0.0,
+                    1.0
+                ],
+                "covariance_p2": [
+                    1.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "grad_covariance_p1": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "grad_covariance_p2": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "grad_p1": [
+                    0.0,
+                    0.0
+                ],
+                "grad_p2": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "objective_value": 0.0,
+                "p1": [
+                    1.0,
+                    2.0
+                ],
+                "p2": [
+                    4.0,
+                    5.0,
+                    6.0
+                ],
+                "sampled_p1": [
+                    1.0,
+                    2.0
+                ],
+                "sampled_p2": [
+                    4.0,
+                    5.0,
+                    6.0
+                ]
+            },
+            "time": 0.0,
+            "time_step": 0
+        },
+        {
+            "OptimizationReporter": {
+                "covariance_p1": [
+                    1.0,
+                    0.0,
+                    1.0
+                ],
+                "covariance_p2": [
+                    1.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    1.0
+                ],
+                "grad_covariance_p1": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "grad_covariance_p2": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "grad_p1": [
+                    0.0,
+                    0.0
+                ],
+                "grad_p2": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "objective_value": 0.0,
+                "p1": [
+                    100.0,
+                    100.0
+                ],
+                "p2": [
+                    200.0,
+                    200.0,
+                    200.0
+                ],
+                "sampled_p1": [
+                    100.30280522370741,
+                    101.12279494078892
+                ],
+                "sampled_p2": [
+                    200.0730414020538,
+                    200.0708592376822,
+                    201.52006949910873
+                ]
+            },
+            "time": 1.0,
+            "time_step": 1
+        }
+    ]
+}
