@@ -322,10 +322,15 @@ OptimizeSolve::setTaoSolutionStatus(double f, int its, double gnorm, double cnor
   // Output the converged iteration outputs
   _problem.outputStep(OptimizationAppTypes::EXEC_FORWARD);
 
+  // update the iteration on the objectiveFunctionReporter
+  _obj_function->updateIterationCount(its);
+
   // Increment timestep. In steady problems timestep = time for outputting.
+  // This is 1 greater than "its" to allow for timeStep=0 to be on initial instead of the first
+  // timeStep
   // See Output.C
   if (_output_opt_iters)
-    _problem.timeStep() += 1;
+    _problem.timeStep() = its + 1;
 
   // print verbose per iteration output
   if (_verbose)

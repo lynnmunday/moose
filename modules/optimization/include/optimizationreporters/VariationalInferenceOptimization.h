@@ -36,13 +36,20 @@ protected:
   /**
    * Function to fill the covariance vector of parameters initial conditions.
    */
-  void fillInitialCovarianceParamsVector(std::vector<Real> & initial_conditions);
+  std::vector<Real> fillInitialCovarianceParamsVector();
   /**
    * Function to fill the covariance vector of parameters bounds.
    */
   void fillBoundsCovarianceParamsVector(std::vector<Real> & data_vec, Real value);
 
 private:
+  /// Reporter that will hold the ELBO objective value
+  Real & _elbo_objective_val;
   /// seed for random number generator
-  unsigned int _seed;
+  const unsigned int _seed;
+  const Real _experimental_noise;
+  const unsigned int _num_experiments;
+  const unsigned int _num_measurements_per_experiment;
+  std::vector<std::vector<Real>> _random_draws;
+  Real _const_term_loglikelihood;
 };
