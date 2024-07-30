@@ -25,6 +25,9 @@ OptimizationReporterBase::validParams()
       "equality_names", std::vector<ReporterValueName>(), "List of equality names.");
   params.addParam<std::vector<ReporterValueName>>(
       "inequality_names", std::vector<ReporterValueName>(), "List of inequality names.");
+  params.addParam<bool>("output_optimization_iterations",
+                        false,
+                        "set output_optimization_iterations on OptimizeSolve executioner.");
   params.registerBase("OptimizationReporterBase");
   return params;
 }

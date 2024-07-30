@@ -45,15 +45,28 @@ VariationalInferenceOptimization::validParams()
       "value");
   params.addParam<unsigned int>("seed", 0, "Seed for random number generator.");
 
+  params.addParam<Real>("experimental_noise", 1, " Mean sample variance of experiments");
+  params.addParam<unsigned int>("num_experiments", 1, "Number of experiments");
+  params.addRequiredParam<unsigned int>("num_measurements_per_experiment",
+                                        "Number of measurement points in each experiment");
+  params.addRequiredParam<ReporterValueName>(
+      "elbo_objective_name", "Preferred name of reporter value defining the ELBO objective.");
   params.addClassDescription("Reporter that provides TAO with the objective, gradient, and "
                              "constraint data, which are supplied by the reporters and "
                              "postprocessors from the forward and adjoint subapps.");
+
   return params;
 }
 
 VariationalInferenceOptimization::VariationalInferenceOptimization(
     const InputParameters & parameters)
-  : GeneralOptimization(parameters), _seed(getParam<unsigned int>("seed"))
+  : GeneralOptimization(parameters),
+    _elbo_objective_val(declareValueByName<Real>(getParam<ReporterValueName>("elbo_objective_name"),
+                                                 REPORTER_MODE_REPLICATED)),
+    _seed(getParam<unsigned int>("seed")),
+    _experimental_noise(getParam<Real>("experimental_noise")),
+    _num_experiments(getParam<unsigned int>("num_experiments")),
+    _num_measurements_per_experiment(getParam<unsigned int>("num_measurements_per_experiment"))
 {
   for (const auto & i : make_range(_nparams))
   {
@@ -64,12 +77,17 @@ VariationalInferenceOptimization::VariationalInferenceOptimization(
     _gradients.push_back(&declareValueByName<std::vector<Real>>(
         "grad_covariance_" + _parameter_names[i], REPORTER_MODE_REPLICATED));
   }
+  _const_term_loglikelihood = -0.5 * (Real)_num_experiments *
+                              (Real)_num_measurements_per_experiment *
+                              std::log(2.0 * M_PI * _experimental_noise);
+  std::cout << std::setprecision() << _const_term_loglikelihood << std::endl;
 }
 
 Real
 VariationalInferenceOptimization::computeObjective()
 {
-  Real val = 0;
+
+  Real regularization = 0;
   if (_tikhonov_coeff > 0.0)
   {
     Real param_norm_sqr = 0;
@@ -77,27 +95,29 @@ VariationalInferenceOptimization::computeObjective()
       for (const auto & param_val : *data)
         param_norm_sqr += param_val * param_val;
     // We multiply by 0.5 to maintain  backwards compatibility.
-    val += 0.5 * _tikhonov_coeff * param_norm_sqr;
+    regularization = 0.5 * _tikhonov_coeff * param_norm_sqr;
   }
-  return _objective_val + val;
+  _elbo_objective_val = _const_term_loglikelihood - (_objective_val + regularization) + dot_product;
+
+  return _elbo_objective_val;
 }
 
 void
 VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Number> & x)
 {
   OptUtils::copyPetscVectorIntoReporter(x, _parameters);
-
-  // we need to do something like _seed+iteration_number
-  std::mt19937 gen(_seed); // Mersenne Twister generator seeded with rd()
+  // increment seed to get new set of parameters
+  _random_draws.clear();
+  unsigned int new_seed = _seed + _its;
+  std::mt19937 gen(new_seed); // Mersenne Twister generator seeded with rd()
   std::normal_distribution<Real> d(0, 1);
-  std::vector<std::vector<Real>> random_draws;
   std::size_t n_params = _parameter_names.size();
   for (std::size_t i = 0; i < n_params; ++i)
   {
     std::vector<Real> random_set_draws;
     for (std::size_t j = 0; j < _nvalues[i]; ++j)
       random_set_draws.push_back(d(gen));
-    random_draws.push_back(random_set_draws);
+    _random_draws.push_back(random_set_draws);
   }
 
   for (std::size_t i = 0; i < n_params; ++i)
@@ -107,7 +127,7 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
     std::vector<Real> cov_vec = *_parameters[i + n_params];
     DenseMatrix<Real> L(_nvalues[i], _nvalues[i]);
     DenseVector<Real> random_set_draws(_nvalues[i]);
-    random_set_draws = random_draws[i];
+    random_set_draws = _random_draws[i];
 
     L.zero();
     int counter = 0;
@@ -120,11 +140,20 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
 
     DenseVector<Real> LE(_nvalues[i]);
     L.vector_mult(LE, random_set_draws);
-    // T ;
     LE.add(1.0, mu);
 
     _sampled_parameters[i]->assign(LE.get_values().begin(), LE.get_values().end());
   }
+
+  // compute variance objective terms
+  Real dot_product = 0;
+  // compute prio
+  for (std::size_t i = 0; i < _sampled_parameters.size(); ++i)
+  {
+    dot_product += (_sampled_parameters[i] - _initial_conditions_mean[i]) *
+                   (_sampled_parameters[i] - _initial_conditions_mean[i]);
+  }
+  dot_product = -1.0 * std::log(2 * M_PI) - .5 * dot_product;
 }
 
 void
@@ -147,15 +176,18 @@ VariationalInferenceOptimization::setICsandBounds()
         "num_parameters",
         "There should be a number in \'num_parameters\' for each name in \'parameter_names\'.");
 
-  std::vector<Real> initial_conditions(fillParamsVector("initial_condition", 0));
+  _initial_conditions_mean = (fillParamsVector("initial_condition", 0));
   _lower_bounds = fillParamsVector("lower_bounds", std::numeric_limits<Real>::lowest());
   _upper_bounds = fillParamsVector("upper_bounds", std::numeric_limits<Real>::max());
 
+  //  -1.0 * std::log(2.0*M_PI) - .5 * (_sampled_parameters - initial_conditions)
+
+  // initialize parameters with initial conditions
   std::size_t stride = 0;
   for (std::size_t i = 0; i < _nvalues.size(); ++i)
   {
-    _sampled_parameters[i]->assign(initial_conditions.begin() + stride,
-                                   initial_conditions.begin() + stride + _nvalues[i]);
+    _sampled_parameters[i]->assign(_initial_conditions_mean.begin() + stride,
+                                   _initial_conditions_mean.begin() + stride + _nvalues[i]);
     stride += _nvalues[i];
   }
 
@@ -168,8 +200,9 @@ VariationalInferenceOptimization::setICsandBounds()
     _nvalues.push_back(entries_in_L_covariance_matrix);
   }
 
-  fillInitialCovarianceParamsVector(initial_conditions);
-  fillBoundsCovarianceParamsVector(_upper_bounds, std::numeric_limits<Real>::max());
+  std::vector<Real> initial_conditions_covariance = fillInitialCovarianceParamsVector();
+  std::vector<Real> initial_conditions fillBoundsCovarianceParamsVector(
+      _upper_bounds, std::numeric_limits<Real>::max());
   fillBoundsCovarianceParamsVector(_lower_bounds, std::numeric_limits<Real>::lowest());
 
   // Now update the total size of the optimization system
@@ -203,12 +236,11 @@ VariationalInferenceOptimization::fillBoundsCovarianceParamsVector(std::vector<R
     data_vec.insert(data_vec.end(), vec.begin(), vec.end());
 }
 
-void
-VariationalInferenceOptimization::fillInitialCovarianceParamsVector(
-    std::vector<Real> & initial_conditions)
+std::vector<Real>
+VariationalInferenceOptimization::fillInitialCovarianceParamsVector()
 {
   // fill with default values
-  std::vector<std::vector<Real>> covariance_data;
+  std::vector<Real> covariance_data;
   for (std::size_t i = _parameter_names.size(); i < _nvalues.size(); ++i)
   {
     dof_id_type n_cov_params = _nvalues[i];
@@ -220,10 +252,7 @@ VariationalInferenceOptimization::fillInitialCovarianceParamsVector(
       cov_params[id_diag] = 1;
       id_diag += i_row + 2;
     }
-    covariance_data.push_back(cov_params);
+    covariance_data.insert(covariance_data.end(), cov_params.begin(), cov_params.end());
   }
-
-  // flatten into single vector
-  for (const auto & vec : covariance_data)
-    initial_conditions.insert(initial_conditions.end(), vec.begin(), vec.end());
+  return covariance_data;
 }

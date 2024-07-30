@@ -129,4 +129,5 @@ OptimizationReporterTest::execute()
     _optSolverParameters->set(i++, val);
 
   _optReporter->updateParameters(*_optSolverParameters.get());
+  _optReporter->computeObjective();
 }

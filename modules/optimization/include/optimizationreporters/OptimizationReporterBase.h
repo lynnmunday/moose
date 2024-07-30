@@ -120,6 +120,8 @@ protected:
   /// Sets the initial conditions and bounds right before it is needed.
   virtual void setICsandBounds(){};
 
+  void updateIterationCount(int its) { _its = its; }
+
   /// Parameter names
   const std::vector<ReporterValueName> & _parameter_names;
   /// Number of parameter vectors
@@ -154,11 +156,14 @@ protected:
   /// Bounds of the parameters
   std::vector<Real> _lower_bounds;
   std::vector<Real> _upper_bounds;
-
+  std::vector<Real> _initial_conditions_mean;
   /// Number of values for each parameter
   std::vector<dof_id_type> _nvalues;
   /// Total number of parameters
   dof_id_type _ndof;
+
+  /// iteration count from optimize solve
+  int _its = 0;
 
 private:
   friend class OptimizeSolve;

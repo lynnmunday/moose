@@ -23,7 +23,10 @@
   initial_condition = '1 2; 4 5 6'
   upper_bounds = '100; 200'
   lower_bounds = '-1; -2'
-
+  num_measurements_per_experiment = 1000
+  experimental_noise = 11610.00
+  num_experiments = 4
+  elbo_objective_name = 'ELBO'
   outputs = out
 []
 
