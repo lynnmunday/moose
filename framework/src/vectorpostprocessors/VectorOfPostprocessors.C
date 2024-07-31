@@ -16,9 +16,12 @@ InputParameters
 VectorOfPostprocessors::validParams()
 {
   InputParameters params = GeneralVectorPostprocessor::validParams();
-
-  params.addRequiredParam<std::vector<PostprocessorName>>(
-      "postprocessors", "The postprocessors whose values are to be reported");
+  params.addParam<std::vector<PostprocessorName>>(
+      "postprocessors", {}, "The postprocessors whose values are to be reported");
+  params.addParam<std::vector<ReporterName>>("reporters",
+                                             {},
+                                             "The reporters whose values are to be reported.  "
+                                             "Reporters must contain a single real value.");
   params.addClassDescription("Outputs the values of an arbitrary user-specified set of "
                              "postprocessors as a vector in the order specified by the user");
 
@@ -35,9 +38,16 @@ VectorOfPostprocessors::VectorOfPostprocessors(const InputParameters & parameter
 {
   std::vector<PostprocessorName> pps_names(
       getParam<std::vector<PostprocessorName>>("postprocessors"));
-  _pp_vec.resize(pps_names.size());
+
+  std::vector<ReporterName> reporter_names(getParam<std::vector<ReporterName>>("reporters"));
+  _pp_vec.resize(pps_names.size() + reporter_names.size());
+
   for (const auto & pps_name : pps_names)
-    _postprocessor_values.push_back(&getPostprocessorValueByName(pps_name));
+    _postprocessor_values.push_back(
+        &getReporterValueByName<Real>(PostprocessorReporterName(pps_name)));
+
+  for (const auto & rep_name : reporter_names)
+    _postprocessor_values.push_back(&getReporterValueByName<Real>(rep_name));
 }
 
 void
