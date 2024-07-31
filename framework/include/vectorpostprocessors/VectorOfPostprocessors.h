@@ -43,5 +43,5 @@ protected:
   VectorPostprocessorValue & _pp_vec;
 
   /// The vector of PostprocessorValue objects that are used to get the values of the postprocessors
-  std::vector<const PostprocessorValue *> _postprocessor_values;
+  std::vector<const Real *> _postprocessor_values;
 };
