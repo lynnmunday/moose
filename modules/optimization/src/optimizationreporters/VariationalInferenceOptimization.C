@@ -77,10 +77,6 @@ VariationalInferenceOptimization::VariationalInferenceOptimization(
     _gradients.push_back(&declareValueByName<std::vector<Real>>(
         "grad_covariance_" + _parameter_names[i], REPORTER_MODE_REPLICATED));
   }
-  _const_term_loglikelihood = -0.5 * (Real)_num_experiments *
-                              (Real)_num_measurements_per_experiment *
-                              std::log(2.0 * M_PI * _experimental_noise);
-  std::cout << std::setprecision() << _const_term_loglikelihood << std::endl;
 }
 
 Real
@@ -97,9 +93,183 @@ VariationalInferenceOptimization::computeObjective()
     // We multiply by 0.5 to maintain  backwards compatibility.
     regularization = 0.5 * _tikhonov_coeff * param_norm_sqr;
   }
-  _elbo_objective_val = _const_term_loglikelihood - (_objective_val + regularization) + dot_product;
+
+  // variational inference objective terms
+  std::size_t n_params = _parameter_names.size();
+  // covariance objective terms
+  Real obj_entropy = 0;
+  for (std::size_t i = 0; i < n_params; ++i)
+  {
+    DenseMatrix<Real> L(_group_covariance[i]);
+    obj_entropy += std::log(L.det()) + 0.5 * _nvalues[i] * (1 + std::log(2 * M_PI));
+  }
+
+  // compute objective terms that only rely on sampled parameters
+  Real dot_product = 0;
+  for (std::size_t ii = 0; ii < _initial_mean_parameters.size(); ++ii)
+    for (std::size_t jj = 0; jj < _initial_mean_parameters[ii].size(); ++jj)
+      dot_product += (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]) *
+                     (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]);
+
+  dot_product = -1.0 * std::log(2 * M_PI) - .5 * dot_product;
+  Real likelihood_free_terms = dot_product - obj_entropy;
+
+  // Constant LogLiklihood for objective function
+  Real const_term_loglikelihood = -0.5 * (Real)_num_experiments *
+                                  (Real)_num_measurements_per_experiment *
+                                  std::log(2.0 * M_PI * _experimental_noise);
+  // combine and compute ELBO
+  _elbo_objective_val = likelihood_free_terms + const_term_loglikelihood -
+                        (_objective_val / _experimental_noise + regularization);
 
   return _elbo_objective_val;
+}
+
+void
+VariationalInferenceOptimization::computeGradient(libMesh::PetscVector<Number> & gradient) const
+{
+  // fixme LYNN  _nvalues contains [mean vals,covariance_vals]
+  //-- make sure grad is being filled in the correct order
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    if (_gradients[param_group_id]->size() != _nvalues[param_group_id])
+      mooseError("The gradient for parameter ",
+                 _parameter_names[param_group_id],
+                 " has changed, expected ",
+                 _nvalues[param_group_id],
+                 " versus ",
+                 _gradients[param_group_id]->size(),
+                 ".");
+
+    if (_tikhonov_coeff > 0.0)
+    {
+      auto params = _parameters[param_group_id];
+      auto grads = _gradients[param_group_id];
+      for (const auto & param_id : make_range(_nvalues[param_group_id]))
+        (*grads)[param_id] += (*params)[param_id] * _tikhonov_coeff;
+    }
+  }
+
+  // modifying for variational inference
+
+  // ******* grad wrt mu terms **********
+  // grad mu of log-likelihood
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    auto grad_all = _gradients[param_group_id];
+    for (const auto & param_id : make_range(_nvalues[param_group_id]))
+      (*grad_all)[param_id] += (*grad_all)[param_id] / _experimental_noise;
+  }
+
+  // grad mu of prior
+  std::vector<std::vector<Real>> grad_mu_prior;
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    std::vector<Real> grad_group;
+    for (std::size_t i = 0; i < _initial_mean_parameters[param_group_id].size(); ++i)
+    {
+      grad_group.push_back(_initial_mean_parameters[param_group_id][i] -
+                           _sampled_parameters[param_group_id]->at(i));
+    }
+    grad_mu_prior.push_back(grad_group);
+  }
+  // add grad mu of prior into mean terms in full gradient
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    auto grad_all = _gradients[param_group_id];
+    auto grad_mu = grad_mu_prior[param_group_id];
+    for (const auto & param_id : make_range(_nvalues[param_group_id]))
+      (*grad_all)[param_id] += grad_mu[param_id];
+  }
+
+  // ******* grad wrt L terms **********
+  // grad L of log Likelihood
+  // this needs grads from forward problem
+  std::vector<std::vector<Real>> grad_LL_L;
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    std::vector<Real> LL_cov_vec;
+    DenseMatrix<Real> LL_cov;
+    DenseVector<Real> eps(_random_draws[param_group_id]);
+    DenseVector<Real> dR_dp(*_gradients[param_group_id]);
+    LL_cov.outer_product(dR_dp, eps);
+    for (std::size_t j = 0; j < _nvalues[param_group_id]; ++j)
+      for (std::size_t k = 0; k < _nvalues[param_group_id]; ++k)
+        if (k < j)
+          LL_cov_vec.push_back(LL_cov(j, k) / _experimental_noise);
+    grad_LL_L.push_back(LL_cov_vec);
+  }
+  // grad L of prior
+  std::vector<std::vector<Real>> grad_prior_L;
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    DenseVector<Real> mup(_initial_mean_parameters[param_group_id]);
+    DenseVector<Real> eps(_random_draws[param_group_id]);
+    DenseMatrix<Real> L(_group_covariance[param_group_id]);
+    DenseVector<Real> mu(*_parameters[param_group_id]);
+    DenseMatrix<Real> mup_eps_T;
+    DenseMatrix<Real> L_eps_eps_T;
+    DenseMatrix<Real> mu_eps_T;
+    mup_eps_T.outer_product(mup, eps);
+    L_eps_eps_T.outer_product(eps, eps);
+    L_eps_eps_T.left_multiply(L);
+    mu_eps_T.outer_product(mu, eps);
+    // Set elememts above the diagonal to 0
+    // creates a lower-triangular matrix
+    for (std::size_t i = 0; i < _nvalues[param_group_id]; ++i)
+      for (std::size_t j = 0; j < _nvalues[param_group_id]; ++j)
+        if (j > i)
+        {
+          mup_eps_T(i, j) = 0;
+          L_eps_eps_T(i, j) = 0;
+          mu_eps_T(i, j) = 0;
+        }
+    DenseMatrix<Real> dP_dL(mup_eps_T);
+    dP_dL -= L_eps_eps_T;
+    dP_dL -= mu_eps_T;
+    std::vector<Real> cov_storage(_nvalues[param_group_id + _nparams]); // st
+    int counter = 0;
+    for (std::size_t row_index = 0; row_index < _nvalues[param_group_id]; row_index++)
+      for (std::size_t col_index = 0; col_index <= row_index; col_index++)
+      {
+        cov_storage[counter] = dP_dL(row_index, col_index);
+        counter++; // So that you can index into cov_vec[counter]
+      }
+    grad_prior_L.push_back(cov_storage);
+  }
+
+  //  grad L of entropy
+  std::vector<std::vector<Real>> grad_entropy_L;
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    DenseMatrix<Real> L(_group_covariance[param_group_id]);
+    std::vector<Real> inverse_vals;
+    for (std::size_t i = 0; i < _nvalues[param_group_id]; ++i)
+      for (std::size_t j = 0; j <= i; ++j)
+      {
+        if (i == j)
+          inverse_vals.push_back(1.0 / L(i, i));
+        else
+          inverse_vals.push_back(0.0);
+      }
+    grad_entropy_L.push_back(inverse_vals);
+  }
+
+  // add grad mu terms into covariance terms of full gradient
+  for (std::size_t i = _nparams; i < 2 * _nparams; ++i)
+  {
+    auto grad_all = _gradients[i];
+    auto grad_1 = grad_LL_L[i];
+    auto grad_2 = grad_prior_L[i];
+    auto grad_3 = grad_entropy_L[i];
+    mooseAssert(grad_1.size() == grad_2.size(), "gradients must be same size.");
+    mooseAssert(grad_1.size() == grad_3.size(), "gradients must be same size.");
+    for (const auto & param_id : make_range(_nvalues[i]))
+      (*grad_all)[param_id] += (grad_1[param_id] + grad_2[param_id] + grad_3[param_id]);
+  }
+
+  // Now copy gradients into petsc vector for TAO
+  OptUtils::copyReporterIntoPetscVector(_gradients, gradient);
 }
 
 void
@@ -108,6 +278,7 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
   OptUtils::copyPetscVectorIntoReporter(x, _parameters);
   // increment seed to get new set of parameters
   _random_draws.clear();
+
   unsigned int new_seed = _seed + _its;
   std::mt19937 gen(new_seed); // Mersenne Twister generator seeded with rd()
   std::normal_distribution<Real> d(0, 1);
@@ -120,15 +291,11 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
     _random_draws.push_back(random_set_draws);
   }
 
+  _group_covariance.clear();
   for (std::size_t i = 0; i < n_params; ++i)
   {
-    DenseVector<Real> mu(_nvalues[i]);
-    mu = *_parameters[i];
     std::vector<Real> cov_vec = *_parameters[i + n_params];
     DenseMatrix<Real> L(_nvalues[i], _nvalues[i]);
-    DenseVector<Real> random_set_draws(_nvalues[i]);
-    random_set_draws = _random_draws[i];
-
     L.zero();
     int counter = 0;
     for (std::size_t row_index = 0; row_index < _nvalues[i]; row_index++)
@@ -137,6 +304,24 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
         L(row_index, col_index) = cov_vec[counter];
         counter++; // So that you can index into cov_vec[counter]
       }
+    _group_covariance.push_back(L);
+  }
+
+  for (std::size_t i = 0; i < n_params; ++i)
+  {
+    DenseVector<Real> mu(_nvalues[i]);
+    mu = *_parameters[i];
+    std::vector<Real> cov_vec = *_parameters[i + n_params];
+    DenseMatrix<Real> L(_group_covariance[i]);
+    DenseVector<Real> random_set_draws(_nvalues[i]);
+    random_set_draws = _random_draws[i];
+
+    // make this member data later!! Computing grad of entropy wrto L
+    std::vector<Real> inverse_vals;
+    for (std::size_t i = 0; i < _nvalues[i]; i++)
+    {
+      inverse_vals.push_back(1.0 / L(i, i)); // FIUOPWHJAOIFHWNAO{FGI:JEWSD{OGSIO }} Change later
+    }
 
     DenseVector<Real> LE(_nvalues[i]);
     L.vector_mult(LE, random_set_draws);
@@ -144,16 +329,6 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
 
     _sampled_parameters[i]->assign(LE.get_values().begin(), LE.get_values().end());
   }
-
-  // compute variance objective terms
-  Real dot_product = 0;
-  // compute prio
-  for (std::size_t i = 0; i < _sampled_parameters.size(); ++i)
-  {
-    dot_product += (_sampled_parameters[i] - _initial_conditions_mean[i]) *
-                   (_sampled_parameters[i] - _initial_conditions_mean[i]);
-  }
-  dot_product = -1.0 * std::log(2 * M_PI) - .5 * dot_product;
 }
 
 void
@@ -176,18 +351,19 @@ VariationalInferenceOptimization::setICsandBounds()
         "num_parameters",
         "There should be a number in \'num_parameters\' for each name in \'parameter_names\'.");
 
-  _initial_conditions_mean = (fillParamsVector("initial_condition", 0));
+  std::vector<Real> initial_conditions_mean_vec(fillParamsVector("initial_condition", 0));
   _lower_bounds = fillParamsVector("lower_bounds", std::numeric_limits<Real>::lowest());
   _upper_bounds = fillParamsVector("upper_bounds", std::numeric_limits<Real>::max());
-
-  //  -1.0 * std::log(2.0*M_PI) - .5 * (_sampled_parameters - initial_conditions)
 
   // initialize parameters with initial conditions
   std::size_t stride = 0;
   for (std::size_t i = 0; i < _nvalues.size(); ++i)
   {
-    _sampled_parameters[i]->assign(_initial_conditions_mean.begin() + stride,
-                                   _initial_conditions_mean.begin() + stride + _nvalues[i]);
+    _initial_mean_parameters.push_back(
+        {initial_conditions_mean_vec.begin() + stride,
+         initial_conditions_mean_vec.begin() + stride + _nvalues[i]});
+    _sampled_parameters[i]->assign(initial_conditions_mean_vec.begin() + stride,
+                                   initial_conditions_mean_vec.begin() + stride + _nvalues[i]);
     stride += _nvalues[i];
   }
 
@@ -201,8 +377,13 @@ VariationalInferenceOptimization::setICsandBounds()
   }
 
   std::vector<Real> initial_conditions_covariance = fillInitialCovarianceParamsVector();
-  std::vector<Real> initial_conditions fillBoundsCovarianceParamsVector(
-      _upper_bounds, std::numeric_limits<Real>::max());
+  // merge all initial conditions into a single vector
+  std::vector<Real> initial_conditions(initial_conditions_mean_vec);
+  initial_conditions.insert(initial_conditions.end(),
+                            initial_conditions_covariance.begin(),
+                            initial_conditions_covariance.end());
+
+  fillBoundsCovarianceParamsVector(_upper_bounds, std::numeric_limits<Real>::max());
   fillBoundsCovarianceParamsVector(_lower_bounds, std::numeric_limits<Real>::lowest());
 
   // Now update the total size of the optimization system
