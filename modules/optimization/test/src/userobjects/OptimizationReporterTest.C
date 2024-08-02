@@ -130,4 +130,8 @@ OptimizationReporterTest::execute()
 
   _optReporter->updateParameters(*_optSolverParameters.get());
   _optReporter->computeObjective();
+
+  std::size_t ndof = _optSolverParameters->size();
+  libMesh::PetscVector<Number> grad(_my_comm, ndof);
+  _optReporter->computeGradient(grad);
 }

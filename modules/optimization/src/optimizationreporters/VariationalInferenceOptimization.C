@@ -82,18 +82,6 @@ VariationalInferenceOptimization::VariationalInferenceOptimization(
 Real
 VariationalInferenceOptimization::computeObjective()
 {
-
-  Real regularization = 0;
-  if (_tikhonov_coeff > 0.0)
-  {
-    Real param_norm_sqr = 0;
-    for (const auto & data : _parameters)
-      for (const auto & param_val : *data)
-        param_norm_sqr += param_val * param_val;
-    // We multiply by 0.5 to maintain  backwards compatibility.
-    regularization = 0.5 * _tikhonov_coeff * param_norm_sqr;
-  }
-
   // variational inference objective terms
   std::size_t n_params = _parameter_names.size();
   // covariance objective terms
@@ -102,25 +90,34 @@ VariationalInferenceOptimization::computeObjective()
   {
     DenseMatrix<Real> L(_group_covariance[i]);
     obj_entropy += std::log(L.det()) + 0.5 * _nvalues[i] * (1 + std::log(2 * M_PI));
+    std::cout << "L: " << L << std::endl;
   }
 
   // compute objective terms that only rely on sampled parameters
-  Real dot_product = 0;
+  Real obj_prior = 0;
   for (std::size_t ii = 0; ii < _initial_mean_parameters.size(); ++ii)
     for (std::size_t jj = 0; jj < _initial_mean_parameters[ii].size(); ++jj)
-      dot_product += (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]) *
-                     (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]);
+      obj_prior += (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]) *
+                   (_sampled_parameters[ii]->at(jj) - _initial_mean_parameters[ii][jj]);
 
-  dot_product = -1.0 * std::log(2 * M_PI) - .5 * dot_product;
-  Real likelihood_free_terms = dot_product - obj_entropy;
+  obj_prior = -1.0 * std::log(2 * M_PI) - .5 * obj_prior;
+  // Real likelihood_free_terms = obj_entropy - obj_prior;
+  // fixme ANDREW we need to remove obj_entropy for finite differencing!
+  Real likelihood_free_terms = -obj_prior;
 
   // Constant LogLiklihood for objective function
   Real const_term_loglikelihood = -0.5 * (Real)_num_experiments *
                                   (Real)_num_measurements_per_experiment *
                                   std::log(2.0 * M_PI * _experimental_noise);
   // combine and compute ELBO
-  _elbo_objective_val = likelihood_free_terms + const_term_loglikelihood -
-                        (_objective_val / _experimental_noise + regularization);
+  _elbo_objective_val =
+      likelihood_free_terms - const_term_loglikelihood + (_objective_val / _experimental_noise);
+
+  std::cout << "--------- obj_entropy: " << obj_entropy << std::endl;
+  std::cout << "--------- obj_prior: " << obj_prior << std::endl;
+  std::cout << "--------- likelihood_free_terms: " << likelihood_free_terms << std::endl;
+  std::cout << "--------- const_term_loglikelihood: " << const_term_loglikelihood << std::endl;
+  std::cout << "--------- _elbo_objective_val: " << _elbo_objective_val << std::endl;
 
   return _elbo_objective_val;
 }
@@ -128,58 +125,44 @@ VariationalInferenceOptimization::computeObjective()
 void
 VariationalInferenceOptimization::computeGradient(libMesh::PetscVector<Number> & gradient) const
 {
-  // fixme LYNN  _nvalues contains [mean vals,covariance_vals]
-  //-- make sure grad is being filled in the correct order
   for (const auto & param_group_id : make_range(_nparams))
   {
-    if (_gradients[param_group_id]->size() != _nvalues[param_group_id])
-      mooseError("The gradient for parameter ",
-                 _parameter_names[param_group_id],
-                 " has changed, expected ",
-                 _nvalues[param_group_id],
-                 " versus ",
-                 _gradients[param_group_id]->size(),
-                 ".");
-
-    if (_tikhonov_coeff > 0.0)
-    {
-      auto params = _parameters[param_group_id];
-      auto grads = _gradients[param_group_id];
-      for (const auto & param_id : make_range(_nvalues[param_group_id]))
-        (*grads)[param_id] += (*params)[param_id] * _tikhonov_coeff;
-    }
+    std::cout << "ln 133 _random_draws: ";
+    for (auto && out : _random_draws[param_group_id])
+      std::cout << " " << out;
+    std::cout << std::endl;
   }
 
   // modifying for variational inference
 
   // ******* grad wrt mu terms **********
   // grad mu of log-likelihood
+  std::vector<std::vector<Real>> grad_LL_mu;
   for (const auto & param_group_id : make_range(_nparams))
   {
-    auto grad_all = _gradients[param_group_id];
+    std::vector<Real> grad_forward = *_gradients[param_group_id];
     for (const auto & param_id : make_range(_nvalues[param_group_id]))
-      (*grad_all)[param_id] += (*grad_all)[param_id] / _experimental_noise;
+      grad_forward[param_id] = grad_forward[param_id] / _experimental_noise;
+    grad_LL_mu.push_back(grad_forward);
   }
 
   // grad mu of prior
-  std::vector<std::vector<Real>> grad_mu_prior;
+  std::vector<std::vector<Real>> grad_prior_mu;
   for (const auto & param_group_id : make_range(_nparams))
   {
     std::vector<Real> grad_group;
     for (std::size_t i = 0; i < _initial_mean_parameters[param_group_id].size(); ++i)
     {
-      grad_group.push_back(_initial_mean_parameters[param_group_id][i] -
-                           _sampled_parameters[param_group_id]->at(i));
+      Real val =
+          _initial_mean_parameters[param_group_id][i] - _sampled_parameters[param_group_id]->at(i);
+      grad_group.push_back(val);
     }
-    grad_mu_prior.push_back(grad_group);
-  }
-  // add grad mu of prior into mean terms in full gradient
-  for (const auto & param_group_id : make_range(_nparams))
-  {
-    auto grad_all = _gradients[param_group_id];
-    auto grad_mu = grad_mu_prior[param_group_id];
-    for (const auto & param_id : make_range(_nvalues[param_group_id]))
-      (*grad_all)[param_id] += grad_mu[param_id];
+    grad_prior_mu.push_back(grad_group);
+
+    std::cout << "ln 178 grad_prior_mu: ";
+    for (auto && out : grad_group)
+      std::cout << " " << out;
+    std::cout << std::endl;
   }
 
   // ******* grad wrt L terms **********
@@ -193,11 +176,16 @@ VariationalInferenceOptimization::computeGradient(libMesh::PetscVector<Number> &
     DenseVector<Real> eps(_random_draws[param_group_id]);
     DenseVector<Real> dR_dp(*_gradients[param_group_id]);
     LL_cov.outer_product(dR_dp, eps);
-    for (std::size_t j = 0; j < _nvalues[param_group_id]; ++j)
-      for (std::size_t k = 0; k < _nvalues[param_group_id]; ++k)
-        if (k < j)
-          LL_cov_vec.push_back(LL_cov(j, k) / _experimental_noise);
+    for (std::size_t i = 0; i < _nvalues[param_group_id]; ++i)
+      for (std::size_t j = 0; j < _nvalues[param_group_id]; ++j)
+        if (j <= i)
+          LL_cov_vec.push_back(1.0 * LL_cov(i, j) / _experimental_noise);
     grad_LL_L.push_back(LL_cov_vec);
+
+    std::cout << "ln 209 grad_LL_L: ";
+    for (auto && out : LL_cov_vec)
+      std::cout << " " << out;
+    std::cout << std::endl;
   }
   // grad L of prior
   std::vector<std::vector<Real>> grad_prior_L;
@@ -236,6 +224,11 @@ VariationalInferenceOptimization::computeGradient(libMesh::PetscVector<Number> &
         counter++; // So that you can index into cov_vec[counter]
       }
     grad_prior_L.push_back(cov_storage);
+
+    std::cout << "ln 252 grad_prior_L: ";
+    for (auto && out : cov_storage)
+      std::cout << " " << out;
+    std::cout << std::endl;
   }
 
   //  grad L of entropy
@@ -253,19 +246,34 @@ VariationalInferenceOptimization::computeGradient(libMesh::PetscVector<Number> &
           inverse_vals.push_back(0.0);
       }
     grad_entropy_L.push_back(inverse_vals);
+
+    std::cout << "ln 274 grad_entropy_L: ";
+    for (auto && out : inverse_vals)
+      std::cout << " " << out;
+    std::cout << std::endl;
   }
 
-  // add grad mu terms into covariance terms of full gradient
-  for (std::size_t i = _nparams; i < 2 * _nparams; ++i)
+  // add grad mu terms into mean terms in full gradient
+  for (const auto & param_group_id : make_range(_nparams))
   {
-    auto grad_all = _gradients[i];
-    auto grad_1 = grad_LL_L[i];
-    auto grad_2 = grad_prior_L[i];
-    auto grad_3 = grad_entropy_L[i];
+    auto grad_all = _gradients[param_group_id];
+    auto grad_LL = grad_LL_mu[param_group_id];
+    auto grad_prior = grad_prior_mu[param_group_id];
+    for (const auto & param_id : make_range(_nvalues[param_group_id]))
+      grad_all->at(param_id) = grad_LL[param_id] - grad_prior[param_id];
+  }
+
+  // add grad L terms into covariance terms of full gradient
+  for (const auto & param_group_id : make_range(_nparams))
+  {
+    auto grad_all = _gradients[param_group_id + _nparams];
+    auto grad_LL = grad_LL_L[param_group_id];
+    auto grad_prior = grad_prior_L[param_group_id];
+    auto grad_entropy = grad_entropy_L[param_group_id];
     mooseAssert(grad_1.size() == grad_2.size(), "gradients must be same size.");
     mooseAssert(grad_1.size() == grad_3.size(), "gradients must be same size.");
-    for (const auto & param_id : make_range(_nvalues[i]))
-      (*grad_all)[param_id] += (grad_1[param_id] + grad_2[param_id] + grad_3[param_id]);
+    for (const auto & param_id : make_range(_nvalues[param_group_id]))
+      grad_all->at(param_id) = (grad_entropy[param_id] + grad_LL[param_id] - grad_prior[param_id]);
   }
 
   // Now copy gradients into petsc vector for TAO
@@ -290,7 +298,7 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
       random_set_draws.push_back(d(gen));
     _random_draws.push_back(random_set_draws);
   }
-
+  // get covariance matrix for each group of parameters
   _group_covariance.clear();
   for (std::size_t i = 0; i < n_params; ++i)
   {
@@ -306,7 +314,7 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
       }
     _group_covariance.push_back(L);
   }
-
+  // use covariance matrix to get random draws for parameters
   for (std::size_t i = 0; i < n_params; ++i)
   {
     DenseVector<Real> mu(_nvalues[i]);
@@ -315,18 +323,9 @@ VariationalInferenceOptimization::updateParameters(const libMesh::PetscVector<Nu
     DenseMatrix<Real> L(_group_covariance[i]);
     DenseVector<Real> random_set_draws(_nvalues[i]);
     random_set_draws = _random_draws[i];
-
-    // make this member data later!! Computing grad of entropy wrto L
-    std::vector<Real> inverse_vals;
-    for (std::size_t i = 0; i < _nvalues[i]; i++)
-    {
-      inverse_vals.push_back(1.0 / L(i, i)); // FIUOPWHJAOIFHWNAO{FGI:JEWSD{OGSIO }} Change later
-    }
-
     DenseVector<Real> LE(_nvalues[i]);
     L.vector_mult(LE, random_set_draws);
     LE.add(1.0, mu);
-
     _sampled_parameters[i]->assign(LE.get_values().begin(), LE.get_values().end());
   }
 }
