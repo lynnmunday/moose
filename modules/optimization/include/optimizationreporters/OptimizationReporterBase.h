@@ -156,7 +156,6 @@ protected:
   /// Bounds of the parameters
   std::vector<Real> _lower_bounds;
   std::vector<Real> _upper_bounds;
-  std::vector<Real> _initial_conditions_mean;
   /// Number of values for each parameter
   std::vector<dof_id_type> _nvalues;
   /// Total number of parameters

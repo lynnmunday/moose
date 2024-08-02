@@ -23,6 +23,8 @@ public:
 
   virtual Real computeObjective() override;
 
+  virtual void computeGradient(libMesh::PetscVector<Number> & gradient) const override;
+
 protected:
   /// sampled parameter values declared as reporter data used in the forward problem
   std::vector<std::vector<Real> *> _sampled_parameters;
@@ -51,5 +53,6 @@ private:
   const unsigned int _num_experiments;
   const unsigned int _num_measurements_per_experiment;
   std::vector<std::vector<Real>> _random_draws;
-  Real _const_term_loglikelihood;
+  std::vector<std::vector<Real>> _initial_mean_parameters;
+  std::vector<DenseMatrix<Real>> _group_covariance;
 };
