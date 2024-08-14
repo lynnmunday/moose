@@ -1,0 +1,14 @@
+[Tests]
+  design = 'GeneralOptimization.md MultiAppReporterTransfer.md ParsedVectorReporter.md ParsedScalarReporter.md OptimizationData.md'
+  issues = '#28372'
+  [wave1D]
+    type = CSVDiff
+    input = inversion.i
+    csvdiff = inversion_out_OptimizationReporter_0001.csv
+    recover = False
+    requirement = 'The system shall be able to perform inverse material optimization on a transient model by'
+    method = '!dbg'
+    valgrind = heavy
+    max_threads = 1 # Optimize executioner does not support multiple threads
+  []
+[]
