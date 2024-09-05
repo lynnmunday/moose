@@ -25,6 +25,7 @@
 #pragma once
 
 #include "neml2/models/Model.h"
+#include "nlohmann/json.h"
 
 namespace neml2
 {
@@ -83,11 +84,15 @@ protected:
    * into 3 intervals. Hence the shape 2-by-3.
    *
    * Same reasoning applies to the constant coefficient matrix A0.
+   * _A2 is defined in the input file
+   * _A0 and _A1 are read from json
    */
   // @{
-  const Tensor & _A0;
-  const Tensor & _A1;
+
   const Tensor & _A2;
+
+  Tensor _A1;
+  Tensor _A0;
   // @}
 
   /// Lower bound of the von Mises stress axis of the table
@@ -122,5 +127,17 @@ protected:
 
   /// Parameter controlling the sharpness of the smooth indexing
   const Real _k;
+
+  ///---------SOME JSON STUFF FROM ROM
+  /// check if a JSON file was loaded and if the specified key exists
+  void checkJSONKey(const std::string & key);
+  /// JSON object constructed from the datafile
+  nlohmann::json _json;
+  //
+  virtual std::vector<std::vector<std::vector<std::vector<Real>>>> getInputLimits()
+  {
+    return _json["input_limits"]
+        .template get<std::vector<std::vector<std::vector<std::vector<Real>>>>>();
+  }
 };
 }

@@ -23,6 +23,7 @@
 // THE SOFTWARE.
 
 #include "TabulatedPolynomialModel2.h"
+#include <fstream>
 
 namespace neml2
 {
@@ -42,14 +43,14 @@ TabulatedPolynomialModel2::expected_options()
   options.set<VariableName>("internal_state_1_rate") = VariableName("state", "s1_rate");
   options.set<VariableName>("internal_state_2_rate") = VariableName("state", "s2_rate");
   // Model constants
-  options.set<CrossRef<Tensor>>("A0");
-  options.set<CrossRef<Tensor>>("A1");
   options.set<CrossRef<Tensor>>("A2");
   options.set<CrossRef<Tensor>>("stress_tile_lower_bounds");
   options.set<CrossRef<Tensor>>("stress_tile_upper_bounds");
   options.set<CrossRef<Tensor>>("temperature_tile_lower_bounds");
   options.set<CrossRef<Tensor>>("temperature_tile_upper_bounds");
   options.set<Real>("index_sharpness") = 1.0;
+  // JSON
+  options.set<std::string>("model_file_name"); // = "../../../data/laromance/test/3tile.json";
   // Use AD
   options.set<bool>("_use_AD_first_derivative") = true;
   options.set<bool>("_use_AD_second_derivative") = true;
@@ -58,8 +59,6 @@ TabulatedPolynomialModel2::expected_options()
 
 TabulatedPolynomialModel2::TabulatedPolynomialModel2(const OptionSet & options)
   : Model(options),
-    _A0(declare_buffer<Tensor>("A0", "A0")),
-    _A1(declare_buffer<Tensor>("A1", "A1")),
     _A2(declare_buffer<Tensor>("A2", "A2")),
     _s_lb(declare_buffer<Tensor>("s_lb", "stress_tile_lower_bounds")),
     _s_ub(declare_buffer<Tensor>("s_ub", "stress_tile_upper_bounds")),
@@ -74,6 +73,35 @@ TabulatedPolynomialModel2::TabulatedPolynomialModel2(const OptionSet & options)
     _s2_dot(declare_output_variable<Scalar>("internal_state_2_rate")),
     _k(options.get<Real>("index_sharpness"))
 {
+  std::string filename = options.get<std::string>("model_file_name");
+  std::ifstream model_file(filename.c_str());
+  model_file >> _json;
+
+  {
+    std::vector<std::vector<std::vector<std::vector<Real>>>> A =
+        _json["A1"].template get<std::vector<std::vector<std::vector<std::vector<Real>>>>>();
+
+    std::vector<Real> linearize_A;
+    for (auto && A1 : A)
+      for (auto && A2 : A1)
+        for (auto && A3 : A2)
+          for (auto && A4 : A3)
+            linearize_A.push_back(A4);
+
+    _A1 = Tensor(torch::from_blob(linearize_A.data(), {2, 3, 3, 4}).clone(), 0);
+  }
+  {
+    std::vector<std::vector<std::vector<Real>>> A =
+        _json["A0"].template get<std::vector<std::vector<std::vector<Real>>>>();
+
+    std::vector<Real> linearize_A;
+    for (auto && A1 : A)
+      for (auto && A2 : A1)
+        for (auto && A3 : A2)
+          linearize_A.push_back(A3);
+
+    _A0 = Tensor(torch::from_blob(linearize_A.data(), {2, 3, 3}).clone(), 0);
+  }
 }
 
 torch::Tensor

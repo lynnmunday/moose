@@ -50,6 +50,7 @@
 [Models]
   [rom]
     type = TabulatedPolynomialModel2
+    model_file_name = 'models/polyrom.json'
     von_mises_stress = 'state/s'
     temperature = 'forces/T'
     internal_state_1 = 'state/s1'
@@ -57,8 +58,6 @@
     equivalent_plastic_strain_rate = 'state/ep_rate'
     internal_state_1_rate = 'state/s1_rate'
     internal_state_2_rate = 'state/s2_rate'
-    A0 = 'A0'
-    A1 = 'A1'
     A2 = 'A2'
     stress_tile_lower_bounds = 's_lb'
     stress_tile_upper_bounds = 's_ub'

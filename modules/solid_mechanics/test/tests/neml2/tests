@@ -2,6 +2,16 @@
   # The original issue is idaholab/blackbear#333
   issues = '#26450 #26920'
   design = 'CauchyStressFromNEML2.md CauchyStressFromNEML2UO.md CauchyStressFromNEML2Receiver.md'
+  [polyrom]
+    type = Exodiff
+    input = 'interrogate_rom.i'
+    exodiff = 'interrogate_rom_out.e'
+    requirement = 'The system shall interrogate a NEML2 model that reads data from JSON.'
+    collections = 'SYSTEM'
+    required_submodule = 'contrib/neml2'
+    libtorch = true
+    valgrind = none
+  []
   [neml2_error]
     type = RunException
     input = 'fem.i'
