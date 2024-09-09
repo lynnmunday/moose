@@ -128,16 +128,7 @@ protected:
   /// Parameter controlling the sharpness of the smooth indexing
   const Real _k;
 
-  ///---------SOME JSON STUFF FROM ROM
-  /// check if a JSON file was loaded and if the specified key exists
-  void checkJSONKey(const std::string & key);
   /// JSON object constructed from the datafile
   nlohmann::json _json;
-  //
-  virtual std::vector<std::vector<std::vector<std::vector<Real>>>> getInputLimits()
-  {
-    return _json["input_limits"]
-        .template get<std::vector<std::vector<std::vector<std::vector<Real>>>>>();
-  }
 };
 }
