@@ -8,4 +8,13 @@
 
     requirement = "The system shall automatically report input errors when a required parameter is not specified."
   []
+  [threaded_error]
+    type = RunException
+    input = threaded_param_error.i
+    min_threads = 2
+    max_threads = 2
+    expect_err = "threaded_param_error.i:20.5:(.*)Intentional threaded paramError from computeValue"
+
+    requirement = "The system shall report parameter errors from threaded execution paths."
+  []
 []
