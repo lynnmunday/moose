@@ -331,7 +331,10 @@ public:
    * @param node Optional hit node to add file path context as a prefix
    */
   [[noreturn]] void
-  callMooseError(std::string msg, const bool with_prefix, const hit::Node * node = nullptr) const;
+  callMooseError(std::string msg,
+                 const bool with_prefix,
+                 const hit::Node * node = nullptr,
+                 const bool suppress_trace = false) const;
 
   /**
    * External method for calling moose error with added object context.
@@ -350,7 +353,8 @@ public:
                                           const InputParameters & params,
                                           std::string msg,
                                           const bool with_prefix,
-                                          const hit::Node * node);
+                                          const hit::Node * node,
+                                          const bool suppress_trace = false);
 
 protected:
   /// The MOOSE application this is associated with

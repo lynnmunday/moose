@@ -172,7 +172,10 @@ std::string mooseMsgFmt(const std::string & msg, const std::string & color);
  * @param node Optional HIT node to associate with the error, adding file path context
  */
 [[noreturn]] void
-mooseErrorRaw(std::string msg, const std::string & prefix = "", const hit::Node * node = nullptr);
+mooseErrorRaw(std::string msg,
+              const std::string & prefix = "",
+              const hit::Node * node = nullptr,
+              const bool should_print_trace = Moose::show_trace);
 
 /**
  * All of the following are not meant to be called directly - they are called by the normal macros
